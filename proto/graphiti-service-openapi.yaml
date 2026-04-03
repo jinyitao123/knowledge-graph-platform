@@ -1,0 +1,191 @@
+openapi: "3.1.0"
+info:
+  title: Graphiti Service API
+  description: Internal REST API for the Python Graphiti service. Only consumed by the Go backend.
+  version: "0.1.0"
+servers:
+  - url: http://graphiti-server:8100
+    description: Internal Docker network
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+                  neo4j: { type: string, example: "connected" }
+                  version: { type: string, example: "0.1.0" }
+
+  /api/v1/ingest:
+    post:
+      summary: Ingest document chunks into the knowledge graph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doc_id, ontology_id, chunks]
+              properties:
+                doc_id: { type: string, format: uuid }
+                ontology_id: { type: string, format: uuid }
+                chunks:
+                  type: array
+                  items:
+                    type: object
+                    required: [text]
+                    properties:
+                      text: { type: string }
+                      metadata:
+                        type: object
+                        properties:
+                          page_number: { type: integer }
+                          chunk_index: { type: integer }
+                          section_title: { type: string }
+      responses:
+        "200":
+          description: Ingestion completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  episode_ids: { type: array, items: { type: string } }
+                  entities_extracted: { type: integer }
+                  relations_extracted: { type: integer }
+
+  /api/v1/search:
+    post:
+      summary: Hybrid search across the knowledge graph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string }
+                ontology_id: { type: string, format: uuid }
+                filters: { type: object }
+                top_k: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        entity: { type: object }
+                        relations: { type: array, items: { type: object } }
+                        score: { type: number }
+                        evidence: { type: string }
+
+  /api/v1/entity-types:
+    post:
+      summary: Register entity types from an ontology
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ontology_id, types]
+              properties:
+                ontology_id: { type: string, format: uuid }
+                types:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, description]
+                    properties:
+                      name: { type: string }
+                      description: { type: string }
+                      properties: { type: object }
+      responses:
+        "200":
+          description: Types registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registered: { type: integer }
+
+  /api/v1/entities:
+    get:
+      summary: List entities with pagination
+      parameters:
+        - name: ontology_id
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated entity list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entities: { type: array, items: { type: object } }
+                  total: { type: integer }
+
+  /api/v1/subgraph:
+    get:
+      summary: Get subgraph around an entity
+      parameters:
+        - name: entity_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: hops
+          in: query
+          schema: { type: integer, default: 2 }
+      responses:
+        "200":
+          description: Subgraph data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes: { type: array, items: { type: object } }
+                  edges: { type: array, items: { type: object } }
+
+  /api/v1/ontology/{ontology_id}:
+    delete:
+      summary: Delete all data associated with an ontology
+      parameters:
+        - name: ontology_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Ontology data deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_entities: { type: integer }
+                  deleted_relations: { type: integer }
