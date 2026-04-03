@@ -314,6 +314,7 @@ body {
 .kg-badge--processing { background: var(--woad-tint); color: var(--woad-tone); }
 .kg-badge--completed { background: var(--sage-tint); color: var(--sage-tone); }
 .kg-badge--failed { background: var(--madder-tint); color: var(--madder-tone); }
+.kg-badge--partial { background: var(--ochre-tint); color: var(--ochre-tone); }
 .kg-badge--default { background: var(--washed-linen); color: var(--clay); }
 
 /* ── Chat ──────────────────────────────────────────── */

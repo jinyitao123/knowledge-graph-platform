@@ -282,10 +282,11 @@ async def process_job(job_data: dict, redis: Redis) -> None:
 
     total_entities = 0
     total_relations = 0
+    failed_chunks = 0
     sem = asyncio.Semaphore(3)  # Max 3 concurrent add_episode calls
 
     async def ingest_chunk(i: int, chunk: str) -> None:
-        nonlocal total_entities, total_relations
+        nonlocal total_entities, total_relations, failed_chunks
         async with sem:
             try:
                 result = await graphiti_client.add_episode(
@@ -303,13 +304,22 @@ async def process_job(job_data: dict, redis: Redis) -> None:
                 await update_status(redis, job_id, "processing", progress)
             except Exception as e:
                 logger.error("chunk ingestion failed", chunk_index=i, error=str(e))
+                failed_chunks += 1
 
     tasks = [ingest_chunk(i, chunk) for i, chunk in enumerate(chunks)]
     await asyncio.gather(*tasks)
 
-    await update_status(redis, job_id, "completed", 100, {
+    if failed_chunks == len(chunks):
+        final_status = "failed"
+    elif failed_chunks > 0:
+        final_status = "partial"
+    else:
+        final_status = "completed"
+
+    await update_status(redis, job_id, final_status, 100, {
         "entities_extracted": total_entities,
         "relations_extracted": total_relations,
+        "failed_chunks": failed_chunks,
     })
 
     logger.info(
